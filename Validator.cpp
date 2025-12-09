@@ -1,427 +1,389 @@
+// Minimal logical validator without STL helpers (only basic arrays/math).
 #include <iostream>
-#include <iomanip>
-#include <vector>
 #include <string>
 
 using namespace std;
 
-bool notGate(bool p) {
-    return !p;
-}
+// Limits to keep everything in fixed-size arrays (no std::vector, no find, no iomanip).
+const int MAX_VARS = 5;
+const int MAX_PREMISES = 5;
+const int MAX_FORMULAS = MAX_PREMISES + 1;     // premises + conclusion
+const int MAX_TOKENS = 32;                     // per formula in postfix
+const int MAX_ROWS = 1 << MAX_VARS;            // 2^5 = 32
 
-bool andGate(bool p, bool q) {
-    return p && q;
-}
+struct Formula {
+    string name;
+    string tokens[MAX_TOKENS];
+    int tokenCount;
+};
 
-
-bool orGate(bool p, bool q) {
-    return p || q;
-}
-
-
-bool impliedBy(bool p, bool q) {
-    return !p || q;
-}
-
-bool evaluatePremise1(bool K, bool M, bool A) {
-    bool leftSide = orGate(K, M);      // (K OR M)
-    bool rightSide = notGate(A);        // (NOT A)
-    return impliedBy(leftSide, rightSide);  // (K OR M) IMPLIES (NOT A)
-}
-
-
-bool evaluatePremise2(bool A, bool M) {
-    return orGate(A, M);
-}
-
-
-bool evaluateConclusion(bool A, bool K) {
-    bool notK = notGate(K);
-    return orGate(A, notK);
-}
-
-
-bool evaluateAllPremises(bool K, bool M, bool A) {
-    bool p1 = evaluatePremise1(K, M, A);
-    bool p2 = evaluatePremise2(A, M);
-    return andGate(p1, p2);
-}
-
-string boolToString(bool value) {
-    return value ? "T" : "F";
-}
-
-bool getTruthValue(bool& result) {
-    string input;
-    cin >> input;
-    
-    // Check if input is "1" or "0"
-    if (input == "1") {
-        result = true;
-        return true;
-    } else if (input == "0") {
-        result = false;
-        return true;
+string boolToString(bool v) { return v ? "T" : "F"; }
+string toLowerSimple(const string& s) {
+    string out = s;
+    for (size_t i = 0; i < out.size(); ++i) {
+        char c = out[i];
+        if (c >= 'A' && c <= 'Z') out[i] = char(c + ('a' - 'A'));
     }
-    
-    
-    string lowerInput = "";
-    for (int i = 0; i < input.length(); i++) {
-        char c = input[i];
-        if (c >= 'A' && c <= 'Z') {
-            lowerInput += (c + 32);  // Convert to lowercase using ASCII values due to case sensitivity
-        } else {
-            lowerInput += c;
+    return out;
+}
+
+// Basic logic ops (still just math/boolean).
+bool opNot(bool p) { return !p; }
+bool opAnd(bool p, bool q) { return p && q; }
+bool opOr(bool p, bool q) { return p || q; }
+bool opImplies(bool p, bool q) { return !p || q; }
+
+// Manual tokenizer: splits operators (),!,&,|,> as separate tokens and
+// separates words; ignores spaces. Handles "!A" by emitting "!" then "A".
+int splitTokens(const string& line, string outTokens[MAX_TOKENS]) {
+    int count = 0;
+    string current = "";
+    auto flush = [&](void) {
+        if (!current.empty() && count < MAX_TOKENS) {
+            outTokens[count++] = current;
+            current.clear();
         }
-    }
-    
+    };
 
-    if (lowerInput == "true") {
-        result = true;
-        return true;
-    } else if (lowerInput == "false") {
-        result = false;
-        return true;
-    }
-    
-    
-    return false;
-}
-
-
-void printTableHeader() {
-    cout << "\n" << string(80, '=') << "\n";
-    cout << "TRUTH TABLE\n";   
-    cout << left << setw(8) << "K" 
-         << setw(8) << "M" 
-         << setw(8) << "A" 
-         << setw(15) << "Premise 1" 
-         << setw(15) << "Premise 2" 
-         << setw(15) << "Conclusion" 
-         << setw(15) << "All Premises" << "\n";
-}
-
-
-void generateTruthTable(bool& isValid, bool& isSatisfiable) {
-    printTableHeader();
-    
-    isValid = true;           
-    isSatisfiable = false;    
-    
-    for (int i = 0; i < 8; i++) {
-        bool K = (i & 4) != 0;  
-        bool M = (i & 2) != 0;  
-        bool A = (i & 1) != 0;  
-        
-        bool premise1 = evaluatePremise1(K, M, A);
-        bool premise2 = evaluatePremise2(A, M);
-        bool conclusion = evaluateConclusion(A, K);
-        bool allPremises = evaluateAllPremises(K, M, A);
-        
-        cout << left << setw(8) << boolToString(K)
-             << setw(8) << boolToString(M)
-             << setw(8) << boolToString(A)
-             << setw(15) << boolToString(premise1)
-             << setw(15) << boolToString(premise2)
-             << setw(15) << boolToString(conclusion)
-             << setw(15) << boolToString(allPremises) << "\n";
-        
-        if (allPremises && !conclusion) {
-            isValid = false;
-        }
-        
-        if (allPremises && conclusion) {
-            isSatisfiable = true;
-        }
-    }
-    
-    
-}
-
-void printResults(bool isValid, bool isSatisfiable) {
-    cout << "\n" << string(80, '=') << "\n";
-    cout << "ANALYSIS RESULTS\n";
-    
-    cout << "\nSATISFIABILITY CHECK:\n";
-    
-    if (isSatisfiable) {
-        cout << "Result: The set of formulas is SATISFIABLE\n";
-        cout << "Explanation: There exists at least one row where all premises and\n";
-        cout << "the conclusion are simultaneously true.\n";
-    } else {
-        cout << "Result: The set of formulas is NOT SATISFIABLE\n";
-        cout << "Explanation: There is no row where all premises and the conclusion\n";
-        cout << "are simultaneously true.\n";
-    }
-    
-    cout << "\nVALIDITY CHECK:\n";
-    
-    if (isValid) {
-        cout << "Result: The argument is VALID\n";
-        cout << "Explanation: In all rows where all premises are true, the conclusion is also true.\n";
-    } else {
-        cout << "Result: The argument is FALSIFIABLE\n";
-        cout << "Explanation: There exists at least one row where all premises are true\n";
-        cout << "but the conclusion is false (counterexample found).\n";
-    }
-    
-    cout << "\n" << string(80, '=') << "\n";
-}
-
-void evaluateSingleCase(bool K, bool M, bool A) {
-    cout << "\n" << string(80, '=') << "\n";
-    cout << "EVALUATION FOR SPECIFIC VALUES\n";
-    cout << string(80, '=') << "\n";
-    
-    bool premise1 = evaluatePremise1(K, M, A);
-    bool premise2 = evaluatePremise2(A, M);
-    bool conclusion = evaluateConclusion(A, K);
-    bool allPremises = evaluateAllPremises(K, M, A);
-    
-    cout << "\nVariable Assignments:\n";
-    cout << "K (Khalid) = " << boolToString(K) << "\n";
-    cout << "M (Mariam) = " << boolToString(M) << "\n";
-    cout << "A (Aly) = " << boolToString(A) << "\n";
-    
-    cout << "\n" << string(80, '-') << "\n";
-    cout << "Evaluation Results:\n";
-    cout << string(80, '-') << "\n";
-    cout << "Premise 1: (K OR M) IMPLIES (NOT A) = " << boolToString(premise1) << "\n";
-    cout << "Premise 2: A OR M = " << boolToString(premise2) << "\n";
-    cout << "Conclusion: A OR (NOT K) = " << boolToString(conclusion) << "\n";
-    cout << "All Premises (P1 AND P2) = " << boolToString(allPremises) << "\n";
-    
-    
-    if (allPremises && !conclusion) {
-        cout << "\n*** This case shows the argument is FALSIFIABLE ***\n";
-        cout << "All premises are true, but the conclusion is false.\n";
-    } else if (allPremises && conclusion) {
-        cout << "\n*** This case satisfies all formulas ***\n";
-        cout << "All premises and the conclusion are true.\n";
-    } else {
-        cout << "\nThis case does not affect validity (premises are not all true).\n";
-    }
-    
-    cout << string(80, '=') << "\n";
-}
-
-
-void interactiveMode() {
-    cout << "\n" << string(80, '=') << "\n";
-    cout << "INTERACTIVE MODE\n";
-    cout << string(80, '=') << "\n";
-    cout << "\nThis mode allows you to evaluate custom logical expressions.\n";
-    
-    char newVariablesChoice = 'y';
-    
-    while (newVariablesChoice == 'y' || newVariablesChoice == 'Y') {
-        int numVariables;
-        cout << "Enter the number of variables (1-5): ";
-        cin >> numVariables;
-        
-        if (numVariables < 1) {
-            cout << "Invalid number of variables. The number must be at least 1.\n";
-            char retryChoice;
-            cout << "Would you like to reenter? (y/n): ";
-            cin >> retryChoice;
-            if (retryChoice == 'y' || retryChoice == 'Y') {
-                continue;  
-            } else {
-                newVariablesChoice = 'n';   
-                break;
-            }
-        } else if (numVariables > 5) {
-            cout << "Invalid number of variables. Please enter a number between 1 and 5.\n";
-            cout << "Would you like to try again? (y/n): ";
-            cin >> newVariablesChoice;
+    for (size_t i = 0; i < line.size(); ++i) {
+        char c = line[i];
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+            flush();
             continue;
         }
-        
-        vector<string> varNames(numVariables);
-        cout << "\nEnter the names for your variables:\n";
-        for (int i = 0; i < numVariables; i++) {
-            cout << "Enter name for variable " << (i + 1) << " (e.g., P, Q, R): ";
-            cin >> varNames[i];
-        }
-        
-        cout << "\nVariables defined: ";
-        for (int i = 0; i < numVariables; i++) {
-            cout << varNames[i];
-            if (i < numVariables - 1) cout << ", ";
-        }
-        cout << "\n";
-        
-        
-        char continueChoice;
-        do {
-            cout << "\n" << string(80, '-') << "\n";
-            cout << "Enter truth values for the variables (1/0 or true/false):\n";
-            vector<bool> variables(numVariables);
-            
-            
-            for (int i = 0; i < numVariables; i++) {
-                bool validInput = false;
-                while (!validInput) {
-                    cout << "Enter truth value for " << varNames[i] << " (1/0 or true/false): ";
-                    bool value;
-                    if (getTruthValue(value)) {
-                        variables[i] = value;
-                        validInput = true;
-                    } else {
-                        cout << "Invalid input! Please enter 1, 0, true, or false.\n";
-                    }
-                }
+        if (c == '(' || c == ')' || c == '&' || c == '|' || c == '>' || c == '!') {
+            flush();
+            if (count < MAX_TOKENS) {
+                string t; t.push_back(c);
+                outTokens[count++] = t;
             }
-            
-            
-            cout << "\nCurrent variable assignments:\n";
-            for (int i = 0; i < numVariables; i++) {
-                cout << varNames[i] << " = " << boolToString(variables[i]) << "\n";
-            }
-            
-            cout << "\nAvailable operations:\n";
-            cout << "1. NOT (negation)\n";
-            cout << "2. AND (conjunction)\n";
-            cout << "3. OR (disjunction)\n";
-            cout << "4. IMPLIES (implication)\n";
-            cout << "\nExample: To evaluate (P OR Q) -> (NOT R):\n";
-            cout << "  - First compute: P OR Q\n";
-            cout << "  - Then compute: NOT R\n";
-            cout << "  - Finally compute: (P OR Q) IMPLIES (NOT R)\n";
-            
-            cout << "\nEnter operation number (1-4): ";
-            int op;
-            cin >> op;
-            
-            if (op >= 1 && op <= 4) {
-                bool result;
-                if (op == 1) {
-                    
-                    if (numVariables < 1) {
-                        cout << "Insufficient variables for NOT operation.\n";
-                    } else {
-                        cout << "\nSelect a variable:\n";
-                        for (int i = 0; i < numVariables; i++) {
-                            cout << "  " << (i + 1) << ". " << varNames[i] << " (currently " << boolToString(variables[i]) << ")\n";
-                        }
-                        cout << "Enter variable number (1 to " << numVariables << "): ";
-                        int varNum;
-                        cin >> varNum;
-                        int idx1 = varNum - 1;  
-                        if (idx1 >= 0 && idx1 < numVariables) {
-                            result = notGate(variables[idx1]);
-                            cout << "\nResult: NOT " << varNames[idx1] << " = " << boolToString(result) << "\n";
-                        } else {
-                            cout << "Invalid variable number.\n";
-                        }
-                    }
-                } else {
-                    
-                    if (numVariables < 2) {
-                        cout << "Insufficient variables for this operation (need at least 2).\n";
-                    } else {
-                        cout << "\nSelect first variable:\n";
-                        for (int i = 0; i < numVariables; i++) {
-                            cout << "  " << (i + 1) << ". " << varNames[i] << " (currently " << boolToString(variables[i]) << ")\n";
-                        }
-                        cout << "Enter first variable number (1 to " << numVariables << "): ";
-                        int varNum1;
-                        cin >> varNum1;
-                        int idx1 = varNum1 - 1; 
-                        
-                        cout << "\nSelect second variable:\n";
-                        for (int i = 0; i < numVariables; i++) {
-                            cout << "  " << (i + 1) << ". " << varNames[i] << " (currently " << boolToString(variables[i]) << ")\n";
-                        }
-                        cout << "Enter second variable number (1 to " << numVariables << "): ";
-                        int varNum2;
-                        cin >> varNum2;
-                        int idx2 = varNum2 - 1; 
-                        
-                        if (idx1 >= 0 && idx1 < numVariables && idx2 >= 0 && idx2 < numVariables) {
-                            bool val1 = variables[idx1];
-                            bool val2 = variables[idx2];
-                            
-                            switch (op) {
-                                case 2:
-                                    result = andGate(val1, val2);
-                                    cout << "\nResult: " << varNames[idx1] << " AND " << varNames[idx2] 
-                                         << " = " << boolToString(result) << "\n";
-                                    break;
-                                case 3:
-                                    result = orGate(val1, val2);
-                                    cout << "\nResult: " << varNames[idx1] << " OR " << varNames[idx2] 
-                                         << " = " << boolToString(result) << "\n";
-                                    break;
-                                case 4:
-                                    result = impliedBy(val1, val2);
-                                    cout << "\nResult: " << varNames[idx1] << " IMPLIES " << varNames[idx2] 
-                                         << " = " << boolToString(result) << "\n";
-                                    break;
-                            }
-                        } else {
-                            cout << "Invalid variable number.\n";
-                        }
-                    }
-                }
-            } else {
-                cout << "Invalid operation number.\n";
-            }
-            
-            cout << "\nOptions:\n";
-            cout << "  y - Evaluate another set of values for these variables\n";
-            cout << "  n - Choose new variables\n";
-            cout << "  e - Exit interactive mode\n";
-            cout << "Enter your choice (y/n/e): ";
-            cin >> continueChoice;
-            
-            if (continueChoice == 'n' || continueChoice == 'N') {
-                    
-                break;
-            } else if (continueChoice == 'e' || continueChoice == 'E') {
-                newVariablesChoice = 'n';
-                break;
-            }
-            
-        } while (true);  
-        
-        if (continueChoice == 'e' || continueChoice == 'E') {
-            break;
+        } else {
+            // normalize to lowercase for case-insensitive matching
+            if (c >= 'A' && c <= 'Z') c = char(c + ('a' - 'A'));
+            current.push_back(c);
         }
     }
+    flush();
+    return count;
+}
+
+// Precedence helper for infix parsing.
+int precedence(const string& op) {
+    if (op == "!") return 3;
+    if (op == "&") return 2;
+    if (op == "|") return 1;
+    if (op == ">") return 0; // lowest (implies)
+    return -1;
+}
+
+bool isRightAssociative(const string& op) {
+    return op == "!" || op == ">";
+}
+
+// Convert infix tokens to postfix (shunting-yard, minimal, space-delimited).
+void infixToPostfix(const string inTokens[MAX_TOKENS], int inCount,
+                    string outTokens[MAX_TOKENS], int& outCount,
+                    bool& ok) {
+    string opStack[MAX_TOKENS];
+    int opTop = 0;
+    outCount = 0;
+    ok = true;
+
+    for (int i = 0; i < inCount; ++i) {
+        const string& t = inTokens[i];
+        if (t == "(") {
+            opStack[opTop++] = t;
+        } else if (t == ")") {
+            // pop until "("
+            bool found = false;
+            while (opTop > 0) {
+                string top = opStack[--opTop];
+                if (top == "(") { found = true; break; }
+                outTokens[outCount++] = top;
+            }
+            if (!found) { ok = false; return; }
+        } else if (t == "!" || t == "&" || t == "|" || t == ">") {
+            int p = precedence(t);
+            while (opTop > 0) {
+                string top = opStack[opTop - 1];
+                int pt = precedence(top);
+                if (pt == -1 || top == "(") break;
+                if ((pt > p) || (pt == p && !isRightAssociative(t))) {
+                    outTokens[outCount++] = opStack[--opTop];
+                } else {
+                    break;
+                }
+            }
+            opStack[opTop++] = t;
+        } else {
+            // variable
+            outTokens[outCount++] = t;
+        }
+    }
+
+    while (opTop > 0) {
+        string top = opStack[--opTop];
+        if (top == "(" || top == ")") { ok = false; return; }
+        outTokens[outCount++] = top;
+    }
+}
+
+// Evaluate postfix (RPN) tokens using a small bool stack.
+bool evaluateRPN(const Formula& f,
+                 const string varNames[MAX_VARS],
+                 const bool values[MAX_VARS],
+                 int varCount,
+                 bool& ok) {
+    bool stack[MAX_TOKENS];
+    int top = 0;
+    ok = true;
+
+    for (int i = 0; i < f.tokenCount; ++i) {
+        const string& t = f.tokens[i];
+        if (t == "!") {
+            if (top < 1) { ok = false; break; }
+            bool a = stack[--top];
+            stack[top++] = opNot(a);
+        } else if (t == "&") {
+            if (top < 2) { ok = false; break; }
+            bool b = stack[--top];
+            bool a = stack[--top];
+            stack[top++] = opAnd(a, b);
+        } else if (t == "|") {
+            if (top < 2) { ok = false; break; }
+            bool b = stack[--top];
+            bool a = stack[--top];
+            stack[top++] = opOr(a, b);
+        } else if (t == ">") {
+            if (top < 2) { ok = false; break; }
+            bool b = stack[--top];
+            bool a = stack[--top];
+            stack[top++] = opImplies(a, b);
+        } else {
+            // variable lookup (linear scan, no std::find)
+            int idx = -1;
+            for (int k = 0; k < varCount; ++k) {
+                if (varNames[k] == t) { idx = k; break; }
+            }
+            if (idx == -1) { ok = false; break; }
+            stack[top++] = values[idx];
+        }
+    }
+    if (!ok || top != 1) {
+        ok = false;
+        return false;
+    }
+    return stack[0];
+}
+
+// Build truth table into a fixed 2D bool array.
+void buildTruthTable(const string varNames[MAX_VARS],
+                     int varCount,
+                     const Formula formulas[MAX_FORMULAS],
+                     int formulaCount,
+                     bool table[MAX_ROWS][MAX_VARS + MAX_FORMULAS],
+                     int& rowCount,
+                     bool& ok) {
+    ok = true;
+    rowCount = 1 << varCount;
+    for (int mask = 0; mask < rowCount; ++mask) {
+        bool assignment[MAX_VARS];
+        for (int i = 0; i < varCount; ++i) {
+            assignment[i] = (mask >> (varCount - 1 - i)) & 1;
+            table[mask][i] = assignment[i];
+        }
+
+        for (int f = 0; f < formulaCount; ++f) {
+            bool good = true;
+            bool val = evaluateRPN(formulas[f], varNames, assignment, varCount, good);
+            if (!good) { ok = false; return; }
+            table[mask][varCount + f] = val;
+        }
+    }
+}
+
+void printTruthTable(const string varNames[MAX_VARS],
+                     int varCount,
+                     const Formula formulas[MAX_FORMULAS],
+                     int formulaCount,
+                     bool table[MAX_ROWS][MAX_VARS + MAX_FORMULAS],
+                     int rowCount) {
+    auto pad = [](const string& s, int w) {
+        string out = s;
+        if ((int)out.size() < w) out.append(w - out.size(), ' ');
+        return out;
+    };
+
+    cout << "\n================ TRUTH TABLE ================\n";
+    const int width = 10;
+    for (int i = 0; i < varCount; ++i) cout << pad(varNames[i], width);
+    for (int f = 0; f < formulaCount; ++f) cout << pad(formulas[f].name, width);
+    cout << "\n";
+
+    for (int r = 0; r < rowCount; ++r) {
+        for (int c = 0; c < varCount + formulaCount; ++c) {
+            cout << pad(boolToString(table[r][c]), width);
+        }
+        cout << "\n";
+    }
+}
+
+void analyzeArgument(const string varNames[MAX_VARS],
+                     bool table[MAX_ROWS][MAX_VARS + MAX_FORMULAS],
+                     int rowCount,
+                     int varCount,
+                     int premiseCount,
+                     int formulaCount) {
+    bool valid = true;
+    bool satisfiable = false;
+    bool counterFound = false;
+    int counterRow = -1;
+    int conclusionIdx = varCount + formulaCount - 1;
+
+    for (int r = 0; r < rowCount; ++r) {
+        bool allPremises = true;
+        for (int p = 0; p < premiseCount; ++p) {
+            allPremises = allPremises && table[r][varCount + p];
+        }
+        bool conclusion = table[r][conclusionIdx];
+        if (allPremises && !conclusion) {
+            valid = false;
+            if (!counterFound) {
+                counterFound = true;
+                counterRow = r;
+            }
+        }
+        if (allPremises && conclusion) satisfiable = true;
+    }
+
+    cout << "\n================ ANALYSIS ===================\n";
+    cout << "Satisfiable: " << (satisfiable ? "Yes" : "No") << "\n";
+    if (valid) {
+        cout << "Valid:       Yes (no counterexample)\n";
+    } else {
+        cout << "Valid:       Falsifiable (counterexample found)\n";
+        if (counterFound) {
+            cout << "Counterexample assignment:\n";
+            for (int i = 0; i < varCount; ++i) {
+                cout << "  " << varNames[i] << " = " << boolToString(table[counterRow][i]) << "\n";
+            }
+        }
+    }
+}
+
+void runPreset() {
+    string vars[MAX_VARS] = {"k", "m", "a"};
+    int varCount = 3;
+
+    Formula formulas[MAX_FORMULAS];
+    int formulaCount = 3;
+
+    // Infix strings (space separated), then converted to postfix.
+    string infix[MAX_TOKENS];
+    int infixCount;
+    bool ok = true;
+
+    formulas[0].name = "Premise1";
+    infixCount = splitTokens("K | M > ! A", infix);
+    infixToPostfix(infix, infixCount, formulas[0].tokens, formulas[0].tokenCount, ok);
+
+    formulas[1].name = "Premise2";
+    infixCount = splitTokens("A | M", infix);
+    infixToPostfix(infix, infixCount, formulas[1].tokens, formulas[1].tokenCount, ok);
+
+    formulas[2].name = "Conclusion";
+    infixCount = splitTokens("A | ! K", infix);
+    infixToPostfix(infix, infixCount, formulas[2].tokens, formulas[2].tokenCount, ok);
+
+    bool table[MAX_ROWS][MAX_VARS + MAX_FORMULAS];
+    int rowCount = 0;
+    buildTruthTable(vars, varCount, formulas, formulaCount, table, rowCount, ok);
+    if (!ok) {
+        cout << "Error building preset truth table.\n";
+        return;
+    }
+    printTruthTable(vars, varCount, formulas, formulaCount, table, rowCount);
+    analyzeArgument(vars, table, rowCount, varCount, formulaCount - 1, formulaCount);
+}
+
+void interactiveMode() {
+    cout << "\n================ INTERACTIVE (INFIX) ================\n";
+    cout << "Operators: ! (NOT)  & (AND)  | (OR)  > (IMPLIES)\n";
+    cout << "Enter expressions space-separated in INFIX form.\n";
+    cout << "Example: ( P | Q ) > ! R   or   P | Q > ! R\n";
+
+    int varCount;
+    cout << "How many variables (1-" << MAX_VARS << ")? ";
+    cin >> varCount;
+    cin.ignore();
+    if (varCount < 1 || varCount > MAX_VARS) {
+        cout << "Invalid variable count.\n";
+        return;
+    }
+
+    string vars[MAX_VARS];
+    for (int i = 0; i < varCount; ++i) {
+        cout << "Name for variable " << (i + 1) << ": ";
+        string tmp; getline(cin, tmp);
+        vars[i] = toLowerSimple(tmp);
+    }
+
+    int premiseCount;
+    cout << "Number of premises (0-" << MAX_PREMISES << "): ";
+    cin >> premiseCount;
+    cin.ignore();
+    if (premiseCount < 0 || premiseCount > MAX_PREMISES) {
+        cout << "Invalid premise count.\n";
+        return;
+    }
+
+    Formula formulas[MAX_FORMULAS];
+    int formulaCount = premiseCount + 1;
+    for (int i = 0; i < premiseCount; ++i) {
+        cout << "Premise " << (i + 1) << " (infix, space-separated): ";
+        string line; getline(cin, line);
+        formulas[i].name = "P" + to_string(i + 1);
+        string infix[MAX_TOKENS];
+        int ic = splitTokens(line, infix);
+        bool okConv = true;
+        infixToPostfix(infix, ic, formulas[i].tokens, formulas[i].tokenCount, okConv);
+        if (!okConv) { cout << "Malformed premise.\n"; return; }
+    }
+
+    cout << "Conclusion (infix, space-separated): ";
+    string concl; getline(cin, concl);
+    formulas[premiseCount].name = "Conclusion";
+    string infixC[MAX_TOKENS];
+    int icc = splitTokens(concl, infixC);
+    bool okConvC = true;
+    infixToPostfix(infixC, icc, formulas[premiseCount].tokens, formulas[premiseCount].tokenCount, okConvC);
+    if (!okConvC) { cout << "Malformed conclusion.\n"; return; }
+
+    bool table[MAX_ROWS][MAX_VARS + MAX_FORMULAS];
+    int rowCount = 0;
+    bool ok = true;
+    buildTruthTable(vars, varCount, formulas, formulaCount, table, rowCount, ok);
+    if (!ok) {
+        cout << "Error: malformed expression or unknown variable.\n";
+        return;
+    }
+
+    printTruthTable(vars, varCount, formulas, formulaCount, table, rowCount);
+    analyzeArgument(vars, table, rowCount, varCount, premiseCount, formulaCount);
 }
 
 int main() {
-    
-    cout << "Argument Validator\n";
-    cout << "Hassan Radwan 25P0391\n";
-    
-    cout << "\nAssigned Argument:\n";
-    cout << "Variables: K (Khalid), M (Mariam), A (Aly)\n";
-    cout << "Premise 1: (K OR M) IMPLIES (NOT A)\n";
-    cout << "Premise 2: A OR M\n";
-    cout << "Conclusion: A OR (NOT K)\n";
-    
-    
-    bool isValid = true;
-    bool isSatisfiable = false;
-   
-    generateTruthTable(isValid, isSatisfiable);
-    
-   
-    printResults(isValid, isSatisfiable);
-    
+    cout << "Argument Validator (no STL helpers)\n";
+    cout << "Preset argument (K, M, A):\n";
+    runPreset();
 
-    cout << "\nWould you like to use interactive mode? (y/n): ";
-    char choice;
-    cin >> choice;
-    
-    if (choice == 'y' || choice == 'Y') {
+    cout << "\nRun interactive mode? (y/n): ";
+    char c; cin >> c; cin.ignore();
+    if (c == 'y' || c == 'Y') {
         interactiveMode();
     }
     
-    cout << "\nAll Done! Thank you!\n";
-    
+    cout << "Done.\n";
     return 0;
 }
 
