@@ -1,15 +1,15 @@
-// Minimal logical validator without STL helpers (only basic arrays/math).
+
 #include <iostream>
 #include <string>
 
 using namespace std;
 
-// Limits to keep everything in fixed-size arrays (no std::vector, no find, no iomanip).
+
 const int MAX_VARS = 5;
-const int MAX_PREMISES = 5;
-const int MAX_FORMULAS = MAX_PREMISES + 1;     // premises + conclusion
-const int MAX_TOKENS = 32;                     // per formula in postfix
-const int MAX_ROWS = 1 << MAX_VARS;            // 2^5 = 32
+const int MAX_PREMISES = 3;
+const int MAX_FORMULAS = MAX_PREMISES + 1;     
+const int MAX_TOKENS = 32;                     
+const int MAX_ROWS = 1 << MAX_VARS;            
 
 struct Formula {
     string name;
@@ -17,9 +17,13 @@ struct Formula {
     int tokenCount;
 };
 
+// Convert a bool to "T"/"F" for compact table printing.
 string boolToString(bool v) { return v ? "T" : "F"; }
+
+// Lowercase a string (ASCII) to make variable and keyword handling case-insensitive.
 string toLowerSimple(const string& s) {
     string out = s;
+    // Walk each character to lowercase A-Z.
     for (size_t i = 0; i < out.size(); ++i) {
         char c = out[i];
         if (c >= 'A' && c <= 'Z') out[i] = char(c + ('a' - 'A'));
@@ -27,14 +31,16 @@ string toLowerSimple(const string& s) {
     return out;
 }
 
-// Basic logic ops (still just math/boolean).
+// Logical NOT.
 bool opNot(bool p) { return !p; }
+// Logical AND.
 bool opAnd(bool p, bool q) { return p && q; }
+// Logical OR.
 bool opOr(bool p, bool q) { return p || q; }
+// Logical implication p -> q.
 bool opImplies(bool p, bool q) { return !p || q; }
 
-// Manual tokenizer: splits operators (),!,&,|,> as separate tokens and
-// separates words; ignores spaces. Handles "!A" by emitting "!" then "A".
+// Split a symbol-mode expression into tokens (operators/parentheses/identifiers), lowercasing identifiers.
 int splitTokens(const string& line, string outTokens[MAX_TOKENS]) {
     int count = 0;
     string current = "";
@@ -45,6 +51,7 @@ int splitTokens(const string& line, string outTokens[MAX_TOKENS]) {
         }
     };
 
+    // Walk characters, emitting operators/parens immediately and grouping letters/digits.
     for (size_t i = 0; i < line.size(); ++i) {
         char c = line[i];
         if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
@@ -58,7 +65,7 @@ int splitTokens(const string& line, string outTokens[MAX_TOKENS]) {
                 outTokens[count++] = t;
             }
         } else {
-            // normalize to lowercase for case-insensitive matching
+            // case-sensitivity fix
             if (c >= 'A' && c <= 'Z') c = char(c + ('a' - 'A'));
             current.push_back(c);
         }
@@ -67,20 +74,69 @@ int splitTokens(const string& line, string outTokens[MAX_TOKENS]) {
     return count;
 }
 
-// Precedence helper for infix parsing.
+
+// Normalize input to symbols if English mode is on; otherwise just lowercase.
+string normalizeExpression(const string& in, bool englishMode) {
+    if (!englishMode) return toLowerSimple(in);
+
+    string out = "";
+    string word = "";
+    auto flushWord = [&](void) {
+        if (word.empty()) return;
+        string w = toLowerSimple(word);
+        if (w == "not" || w == "no" || w == "~") {
+            out += "! ";
+        } else if (w == "and" || w == "&&") {
+            out += "& ";
+        } else if (w == "or" || w == "||") {
+            out += "| ";
+        } else if (w == "implies" || w == "then" || w == "if" || w == "=>" || w == ">") {
+            out += "> ";
+        } else {
+            out += w + " ";
+        }
+        word.clear();
+    };
+
+    // Walk characters, mapping keywords/operators to symbols, leaving variables as words.
+    for (size_t i = 0; i < in.size(); ++i) {
+        char c = in[i];
+        if (c >= 'A' && c <= 'Z') c = char(c + ('a' - 'A'));
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+            flushWord();
+        } else if (c == '(' || c == ')' || c == '&' || c == '|' || c == '>' || c == '!' || c == '~') {
+            flushWord();
+            if (c == '~') c = '!';
+            out.push_back(c);
+            out.push_back(' ');
+        } else if (c == '=' && i + 1 < in.size() && in[i + 1] == '>') {
+            flushWord();
+            out += "> ";
+            ++i;
+        } else {
+            word.push_back(c);
+        }
+    }
+    flushWord();
+    return out;
+}
+
+// Return operator precedence (higher number = tighter bind).
 int precedence(const string& op) {
     if (op == "!") return 3;
     if (op == "&") return 2;
     if (op == "|") return 1;
-    if (op == ">") return 0; // lowest (implies)
+    if (op == ">") return 0; 
     return -1;
 }
 
+// Identify right-associative operators (NOT, IMPLIES).
 bool isRightAssociative(const string& op) {
     return op == "!" || op == ">";
 }
 
-// Convert infix tokens to postfix (shunting-yard, minimal, space-delimited).
+// convert infix tokens to postfix to avoid recursion
+// Convert infix tokens to postfix so evaluation can use a small stack.
 void infixToPostfix(const string inTokens[MAX_TOKENS], int inCount,
                     string outTokens[MAX_TOKENS], int& outCount,
                     bool& ok) {
@@ -89,12 +145,13 @@ void infixToPostfix(const string inTokens[MAX_TOKENS], int inCount,
     outCount = 0;
     ok = true;
 
+    // Scan infix tokens, shunting operators to produce postfix order.
     for (int i = 0; i < inCount; ++i) {
         const string& t = inTokens[i];
         if (t == "(") {
             opStack[opTop++] = t;
         } else if (t == ")") {
-            // pop until "("
+            
             bool found = false;
             while (opTop > 0) {
                 string top = opStack[--opTop];
@@ -121,6 +178,7 @@ void infixToPostfix(const string inTokens[MAX_TOKENS], int inCount,
         }
     }
 
+    // Drain remaining operators to the output.
     while (opTop > 0) {
         string top = opStack[--opTop];
         if (top == "(" || top == ")") { ok = false; return; }
@@ -128,16 +186,18 @@ void infixToPostfix(const string inTokens[MAX_TOKENS], int inCount,
     }
 }
 
-// Evaluate postfix (RPN) tokens using a small bool stack.
+
 bool evaluateRPN(const Formula& f,
                  const string varNames[MAX_VARS],
                  const bool values[MAX_VARS],
                  int varCount,
                  bool& ok) {
+    // Evaluate a postfix formula using the current row assignment.
     bool stack[MAX_TOKENS];
     int top = 0;
     ok = true;
 
+    // Process each postfix token, pushing variables, applying ops.
     for (int i = 0; i < f.tokenCount; ++i) {
         const string& t = f.tokens[i];
         if (t == "!") {
@@ -160,8 +220,9 @@ bool evaluateRPN(const Formula& f,
             bool a = stack[--top];
             stack[top++] = opImplies(a, b);
         } else {
-            // variable lookup (linear scan, no std::find)
+            // variable lookup
             int idx = -1;
+            // Linear scan to find matching variable name.
             for (int k = 0; k < varCount; ++k) {
                 if (varNames[k] == t) { idx = k; break; }
             }
@@ -176,7 +237,7 @@ bool evaluateRPN(const Formula& f,
     return stack[0];
 }
 
-// Build truth table into a fixed 2D bool array.
+// truth table builder
 void buildTruthTable(const string varNames[MAX_VARS],
                      int varCount,
                      const Formula formulas[MAX_FORMULAS],
@@ -184,15 +245,19 @@ void buildTruthTable(const string varNames[MAX_VARS],
                      bool table[MAX_ROWS][MAX_VARS + MAX_FORMULAS],
                      int& rowCount,
                      bool& ok) {
+    // Fill the 2D truth table: variables first, then each formula per row.
     ok = true;
     rowCount = 1 << varCount;
+    // Iterate all 2^n assignments via bitmask.
     for (int mask = 0; mask < rowCount; ++mask) {
         bool assignment[MAX_VARS];
+        // Map bits to variable truth values.
         for (int i = 0; i < varCount; ++i) {
             assignment[i] = (mask >> (varCount - 1 - i)) & 1;
             table[mask][i] = assignment[i];
         }
 
+        // Evaluate each formula for this assignment.
         for (int f = 0; f < formulaCount; ++f) {
             bool good = true;
             bool val = evaluateRPN(formulas[f], varNames, assignment, varCount, good);
@@ -208,18 +273,20 @@ void printTruthTable(const string varNames[MAX_VARS],
                      int formulaCount,
                      bool table[MAX_ROWS][MAX_VARS + MAX_FORMULAS],
                      int rowCount) {
+    // Pretty-print the truth table from the stored 2D array.
     auto pad = [](const string& s, int w) {
         string out = s;
         if ((int)out.size() < w) out.append(w - out.size(), ' ');
         return out;
     };
 
-    cout << "\n================ TRUTH TABLE ================\n";
+    cout << "\n                 TRUTH TABLE                 \n";
     const int width = 10;
     for (int i = 0; i < varCount; ++i) cout << pad(varNames[i], width);
     for (int f = 0; f < formulaCount; ++f) cout << pad(formulas[f].name, width);
     cout << "\n";
 
+    // Print each row of vars + formulas.
     for (int r = 0; r < rowCount; ++r) {
         for (int c = 0; c < varCount + formulaCount; ++c) {
             cout << pad(boolToString(table[r][c]), width);
@@ -234,14 +301,17 @@ void analyzeArgument(const string varNames[MAX_VARS],
                      int varCount,
                      int premiseCount,
                      int formulaCount) {
+    // Scan the table to check satisfiability and find counterexamples to validity.
     bool valid = true;
     bool satisfiable = false;
     bool counterFound = false;
     int counterRow = -1;
     int conclusionIdx = varCount + formulaCount - 1;
 
+    // Inspect every row for satisfiability and counterexamples.
     for (int r = 0; r < rowCount; ++r) {
         bool allPremises = true;
+        // Check all premises in this row.
         for (int p = 0; p < premiseCount; ++p) {
             allPremises = allPremises && table[r][varCount + p];
         }
@@ -256,64 +326,32 @@ void analyzeArgument(const string varNames[MAX_VARS],
         if (allPremises && conclusion) satisfiable = true;
     }
 
-    cout << "\n================ ANALYSIS ===================\n";
+    cout << "\n                 ANALYSIS                     \n";
     cout << "Satisfiable: " << (satisfiable ? "Yes" : "No") << "\n";
     if (valid) {
-        cout << "Valid:       Yes (no counterexample)\n";
-    } else {
-        cout << "Valid:       Falsifiable (counterexample found)\n";
+        cout << "Valid: Yes (no counterexample)\n";
+                    } else {
+        cout << "Valid: Falsifiable (counterexample found)\n";
         if (counterFound) {
-            cout << "Counterexample assignment:\n";
-            for (int i = 0; i < varCount; ++i) {
+            cout << "Counterexample: \n";
+    // Report the first counterexample
+    for (int i = 0; i < varCount; ++i) {
                 cout << "  " << varNames[i] << " = " << boolToString(table[counterRow][i]) << "\n";
             }
         }
     }
 }
 
-void runPreset() {
-    string vars[MAX_VARS] = {"k", "m", "a"};
-    int varCount = 3;
-
-    Formula formulas[MAX_FORMULAS];
-    int formulaCount = 3;
-
-    // Infix strings (space separated), then converted to postfix.
-    string infix[MAX_TOKENS];
-    int infixCount;
-    bool ok = true;
-
-    formulas[0].name = "Premise1";
-    infixCount = splitTokens("K | M > ! A", infix);
-    infixToPostfix(infix, infixCount, formulas[0].tokens, formulas[0].tokenCount, ok);
-
-    formulas[1].name = "Premise2";
-    infixCount = splitTokens("A | M", infix);
-    infixToPostfix(infix, infixCount, formulas[1].tokens, formulas[1].tokenCount, ok);
-
-    formulas[2].name = "Conclusion";
-    infixCount = splitTokens("A | ! K", infix);
-    infixToPostfix(infix, infixCount, formulas[2].tokens, formulas[2].tokenCount, ok);
-
-    bool table[MAX_ROWS][MAX_VARS + MAX_FORMULAS];
-    int rowCount = 0;
-    buildTruthTable(vars, varCount, formulas, formulaCount, table, rowCount, ok);
-    if (!ok) {
-        cout << "Error building preset truth table.\n";
-        return;
-    }
-    printTruthTable(vars, varCount, formulas, formulaCount, table, rowCount);
-    analyzeArgument(vars, table, rowCount, varCount, formulaCount - 1, formulaCount);
-}
-
 void interactiveMode() {
-    cout << "\n================ INTERACTIVE (INFIX) ================\n";
+    // ask user for variables, mode (symbols vs English), premises, and conclusion; then analyze. 
     cout << "Operators: ! (NOT)  & (AND)  | (OR)  > (IMPLIES)\n";
-    cout << "Enter expressions space-separated in INFIX form.\n";
-    cout << "Example: ( P | Q ) > ! R   or   P | Q > ! R\n";
+    cout << "You can type symbols directly, or choose English keywords\n";
+    cout << "(not/no, and, or, implies/then)\n";
+    cout << "Example symbols: ( p | q ) > ! r\n";
+    cout << "Example English: p and q then not r\n";
 
     int varCount;
-    cout << "How many variables (1-" << MAX_VARS << ")? ";
+    cout << "How many variables? (1-" << MAX_VARS << "): ";
     cin >> varCount;
     cin.ignore();
     if (varCount < 1 || varCount > MAX_VARS) {
@@ -321,11 +359,22 @@ void interactiveMode() {
         return;
     }
 
+    bool englishMode = false;
+    cout << "Use English keywords instead of symbols? (y/n): ";
+    char modeChoice; cin >> modeChoice; cin.ignore();
+    if (modeChoice == 'y' || modeChoice == 'Y') englishMode = true;
+
     string vars[MAX_VARS];
+    // Read variable names (single letters in symbol mode, words allowed in English mode).
     for (int i = 0; i < varCount; ++i) {
         cout << "Name for variable " << (i + 1) << ": ";
         string tmp; getline(cin, tmp);
-        vars[i] = toLowerSimple(tmp);
+        tmp = toLowerSimple(tmp);
+        if (!englishMode && tmp.size() != 1) {
+            cout << "In symbol mode, use single-letter variable names.\n";
+            return;
+        }
+        vars[i] = tmp;
     }
 
     int premiseCount;
@@ -339,22 +388,25 @@ void interactiveMode() {
 
     Formula formulas[MAX_FORMULAS];
     int formulaCount = premiseCount + 1;
+    // Read each premise, normalize (if English mode), tokenize, convert to postfix.
     for (int i = 0; i < premiseCount; ++i) {
-        cout << "Premise " << (i + 1) << " (infix, space-separated): ";
+        cout << "Premise " << (i + 1) << ": ";
         string line; getline(cin, line);
         formulas[i].name = "P" + to_string(i + 1);
         string infix[MAX_TOKENS];
-        int ic = splitTokens(line, infix);
+        string normalized = normalizeExpression(line, englishMode);
+        int ic = splitTokens(normalized, infix);
         bool okConv = true;
         infixToPostfix(infix, ic, formulas[i].tokens, formulas[i].tokenCount, okConv);
         if (!okConv) { cout << "Malformed premise.\n"; return; }
     }
 
-    cout << "Conclusion (infix, space-separated): ";
+    cout << "Conclusion: ";
     string concl; getline(cin, concl);
     formulas[premiseCount].name = "Conclusion";
     string infixC[MAX_TOKENS];
-    int icc = splitTokens(concl, infixC);
+    string normalizedC = normalizeExpression(concl, englishMode);
+    int icc = splitTokens(normalizedC, infixC);
     bool okConvC = true;
     infixToPostfix(infixC, icc, formulas[premiseCount].tokens, formulas[premiseCount].tokenCount, okConvC);
     if (!okConvC) { cout << "Malformed conclusion.\n"; return; }
@@ -373,17 +425,11 @@ void interactiveMode() {
 }
 
 int main() {
-    cout << "Argument Validator (no STL helpers)\n";
-    cout << "Preset argument (K, M, A):\n";
-    runPreset();
-
-    cout << "\nRun interactive mode? (y/n): ";
-    char c; cin >> c; cin.ignore();
-    if (c == 'y' || c == 'Y') {
+    // Entry point: run interactive mode only.
+    cout << "                 ARGUMENT VALIDATOR             \n";
+    cout << "                 Hassan Radwan 25P0391                \n";
         interactiveMode();
-    }
-    
-    cout << "Done.\n";
+    cout << "Thank You!\n";
     return 0;
 }
 
