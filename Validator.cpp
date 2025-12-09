@@ -360,9 +360,9 @@ void interactiveMode() {
     }
 
     bool englishMode = false;
-    cout << "Use English keywords instead of symbols? (y/n): ";
-    char modeChoice; cin >> modeChoice; cin.ignore();
-    if (modeChoice == 'y' || modeChoice == 'Y') englishMode = true;
+    cout << "Use English keywords instead of symbols? (yes or no): ";
+    string modeChoice; cin >> modeChoice; cin.ignore();
+    if (modeChoice == "yes" || modeChoice == "YES" || modeChoice == "y" || modeChoice == "Y") englishMode = true;
 
     string vars[MAX_VARS];
     // Read variable names (single letters in symbol mode, words allowed in English mode).
