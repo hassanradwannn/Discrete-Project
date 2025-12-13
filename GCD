@@ -1,0 +1,119 @@
+#include <iostream>
+using namespace std;
+
+// Method 1: GCD using repeated subtraction
+int gcd_subtraction(int a, int b) {
+    while (a != b) {
+        if (a > b)
+            a = a - b;
+        else
+            b = b - a;
+    }
+    return a;
+
+}
+
+// GCD for a set using Method 1
+int gcd_set_subtraction(int arr[], int n) {
+    int result = arr[0];
+    for (int i = 1; i < n; i++) {
+        result = gcd_subtraction(result, arr[i]);
+    }
+    return result;
+}
+
+// LCM using GCD
+int lcm_from_gcd(int a, int b, int gcd) {
+    return (a * b) / gcd;
+}
+
+int lcm_set_subtraction(int arr[], int n) {
+    int g = gcd_set_subtraction(arr, n);
+    int result = (arr[0] * arr[1]) / g;
+
+    for (int i = 2; i < n; i++) {
+        int gcd_temp = gcd_subtraction(result, arr[i]);
+        result = (result * arr[i]) / gcd_temp;
+    }
+    return result;
+}
+
+// Method 2: GCD using division (Euclid)
+
+int gcd_division(int a, int b) {
+    int temp;
+    while (b != 0) {
+        temp = a % b;
+        a = b;
+        b = temp;
+    }
+    return a;
+}
+
+// GCD for a set using Method 2
+int gcd_set_division(int arr[], int n) {
+    int result = arr[0];
+    for (int i = 1; i < n; i++) {
+        result = gcd_division(result, arr[i]);
+    }
+    return result;
+}
+
+int lcm_set_division(int arr[], int n) {
+    int result = arr[0];
+    for (int i = 1; i < n; i++) {
+        int gcd_temp = gcd_division(result, arr[i]);
+        result = (result * arr[i]) / gcd_temp;
+    }
+    return result;
+}
+
+// Da MAIN PROGRAM
+int main() {
+
+    // 1) fixed numbers (given)
+    int arr1[] = {12, 18, 24};
+    int n1 = 3;
+
+    cout << "=== Fixed Numbers (12, 18, 24) ===\n";
+    cout << "GCD (Subtraction Method): " << gcd_set_subtraction(arr1, n1) << endl;
+    cout << "GCD (Division Method): " << gcd_set_division(arr1, n1) << endl;
+
+    cout << "LCM (Subtraction Method): " << lcm_set_subtraction(arr1, n1) << endl;
+    cout << "LCM (Division Method): " << lcm_set_division(arr1, n1) << endl;
+
+
+    // 2) USER INPUT (ask for numbers)
+    int n;
+    cout << "\nEnter how many integers you want: ";
+    cin >> n;
+
+    int arruser[100];
+    for (int i = 0; i < n; i++) {
+        cout << "Enter number " << (i + 1) << ": ";
+        cin >> arruser[i];
+    }
+
+    cout << "\nDo you want to calculate (1) GCD or (2) LCM? ";
+    int choice;
+    cin >> choice;
+
+    if (choice == 1) {
+        cout << "\nGCD (Subtraction Method): " << gcd_set_subtraction(arruser, n) << endl;
+        cout << "GCD (Division Method): " << gcd_set_division(arruser, n) << endl;
+    }
+    else if (choice == 2) {
+        cout << "\nLCM (Subtraction Method): " << lcm_set_subtraction(arruser, n) << endl;
+        cout << "LCM (Division Method): " << lcm_set_division(arruser, n) << endl;
+    }
+    else {
+        cout << "Invalid choice.\n";
+    }
+
+    // Comparison
+    cout << "\n=== Comparison ===\n";
+    cout << "Subtraction method is slower but works without using modulo.\n";
+    cout << "Division method (Euclid) is much faster and more efficient.\n";
+
+    return 0;
+}
