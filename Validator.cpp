@@ -1,30 +1,23 @@
-// Empty line or start of file
 #include <iostream>  // Include iostream for input/output
 #include <string>  // Include string for string handling
 
-// Empty line
 using namespace std;  // Use standard namespace
 
-// Empty line
-// Empty line
 const int MAX_VARS = 5;  // Maximum number of variables
 const int MAX_PREMISES = 3;  // Maximum number of premises
 const int MAX_FORMULAS = MAX_PREMISES + 1;  // Maximum number of formulas (premises + conclusion)
 const int MAX_TOKENS = 32;  // Maximum number of tokens
 const int MAX_ROWS = 1 << MAX_VARS;  // Maximum number of rows in truth table (2^MAX_VARS)
 
-// Empty line
 struct Formula {  // Define struct for formula
     string name;  // Name of the formula
     string tokens[MAX_TOKENS];  // Array of tokens
     int tokenCount;  // Number of tokens
 };
 
-// Empty line
 // Convert a bool to "T"/"F" for compact table printing.
 string boolToString(bool v) { return v ? "T" : "F"; }  // Function to convert bool to string
 
-// Empty line
 // Lowercase a string (ASCII) to make variable and keyword handling case-insensitive.
 string toLowerSimple(const string& s) {  // Function to lowercase string
     string out = s;  // Copy input string
@@ -36,7 +29,6 @@ string toLowerSimple(const string& s) {  // Function to lowercase string
     return out;  // Return the lowercased string
 }
 
-// Empty line
 // Logical NOT.
 bool opNot(bool p) { return !p; }  // Function for logical NOT
 // Logical AND.
@@ -46,7 +38,6 @@ bool opOr(bool p, bool q) { return p || q; }  // Function for logical OR
 // Logical implication p -> q.
 bool opImplies(bool p, bool q) { return !p || q; }  // Function for implication
 
-// Empty line
 // Split a symbol-mode expression into tokens (operators/parentheses/identifiers), lowercasing identifiers.
 int splitTokens(const string& line, string outTokens[MAX_TOKENS]) {  // Function to split expression into tokens
     int count = 0;  // Token count
@@ -58,7 +49,6 @@ int splitTokens(const string& line, string outTokens[MAX_TOKENS]) {  // Function
         }
     };
 
-// Empty line
     // Walk characters, emitting operators/parens immediately and grouping letters/digits.
     for (size_t i = 0; i < line.size(); ++i) {  // Loop through each character in line
         char c = line[i];  // Get current character
@@ -83,13 +73,10 @@ int splitTokens(const string& line, string outTokens[MAX_TOKENS]) {  // Function
 }
 
 
-// Empty line
-// Empty line
 // Normalize input to symbols if English mode is on; otherwise just lowercase.
 string normalizeExpression(const string& in, bool englishMode) {  // Function to normalize expression
     if (!englishMode) return toLowerSimple(in);  // If not english mode, just lowercase
 
-// Empty line
     string out = "";  // Output string
     string word = "";  // Current word
     auto flushWord = [&](void) {  // Lambda to process word
@@ -109,7 +96,6 @@ string normalizeExpression(const string& in, bool englishMode) {  // Function to
         word.clear();  // Clear word
     };
 
-// Empty line
     // Walk characters, mapping keywords/operators to symbols, leaving variables as words.
     for (size_t i = 0; i < in.size(); ++i) {  // Loop through input
         char c = in[i];  // Get char
@@ -133,7 +119,6 @@ string normalizeExpression(const string& in, bool englishMode) {  // Function to
     return out;  // Return normalized
 }
 
-// Empty line
 // Return operator precedence (higher number = tighter bind).
 int precedence(const string& op) {  // Function for precedence
     if (op == "!") return 3;  // NOT highest
@@ -143,13 +128,11 @@ int precedence(const string& op) {  // Function for precedence
     return -1;  // Invalid
 }
 
-// Empty line
 // Identify right-associative operators (NOT, IMPLIES).
 bool isRightAssociative(const string& op) {  // Function for associativity
     return op == "!" || op == ">";  // NOT and IMPLIES are right assoc
 }
 
-// Empty line
 // convert infix tokens to postfix to avoid recursion
 // Convert infix tokens to postfix so evaluation can use a small stack.
 void infixToPostfix(const string inTokens[MAX_TOKENS], int inCount,  // Function to convert infix to postfix
@@ -160,7 +143,6 @@ void infixToPostfix(const string inTokens[MAX_TOKENS], int inCount,  // Function
     outCount = 0;  // Output count
     ok = true;  // Assume ok
 
-// Empty line
     // Scan infix tokens, shunting operators to produce postfix order.
     for (int i = 0; i < inCount; ++i) {  // Loop through input tokens
         const string& t = inTokens[i];  // Current token
@@ -168,7 +150,6 @@ void infixToPostfix(const string inTokens[MAX_TOKENS], int inCount,  // Function
             opStack[opTop++] = t;  // Push to stack
         } else if (t == ")") {  // If right paren
 
-// Empty line
             bool found = false;  // Flag for matching paren
             while (opTop > 0) {  // While stack not empty
                 string top = opStack[--opTop];  // Pop
@@ -195,7 +176,6 @@ void infixToPostfix(const string inTokens[MAX_TOKENS], int inCount,  // Function
         }
     }
 
-// Empty line
     // Drain remaining operators to the output.
     while (opTop > 0) {  // While stack not empty
         string top = opStack[--opTop];  // Pop
@@ -205,7 +185,6 @@ void infixToPostfix(const string inTokens[MAX_TOKENS], int inCount,  // Function
 }
 
 
-// Empty line
 bool evaluateRPN(const Formula& f,  // Function to evaluate RPN
                   const string varNames[MAX_VARS],  // Variable names
                   const bool values[MAX_VARS],  // Variable values
@@ -216,7 +195,6 @@ bool evaluateRPN(const Formula& f,  // Function to evaluate RPN
     int top = 0;  // Stack top
     ok = true;  // Assume ok
 
-// Empty line
     // Process each postfix token, pushing variables, applying ops.
     for (int i = 0; i < f.tokenCount; ++i) {  // Loop through tokens
         const string& t = f.tokens[i];  // Current token
@@ -257,7 +235,6 @@ bool evaluateRPN(const Formula& f,  // Function to evaluate RPN
     return stack[0];  // Return result
 }
 
-// Empty line
 // truth table builder
 void buildTruthTable(const string varNames[MAX_VARS],  // Function to build truth table
                       int varCount,  // Number of variables
@@ -288,7 +265,6 @@ void buildTruthTable(const string varNames[MAX_VARS],  // Function to build trut
     }
 }
 
-// Empty line
 void printTruthTable(const string varNames[MAX_VARS],  // Function to print truth table
                       int varCount,  // Var count
                       const Formula formulas[MAX_FORMULAS],  // Formulas
@@ -302,7 +278,6 @@ void printTruthTable(const string varNames[MAX_VARS],  // Function to print trut
         return out;  // Return
     };
 
-// Empty line
     cout << "\n                 TRUTH TABLE                 \n";  // Print header
     const int width = 10;  // Column width
     for (int i = 0; i < varCount; ++i) cout << pad(varNames[i], width);  // Print var names
